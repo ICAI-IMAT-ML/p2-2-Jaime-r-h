@@ -6,6 +6,7 @@ import numpy as np
 import seaborn as sns
 
 
+
 def minkowski_distance(a, b, p=2):
     """
     Compute the Minkowski distance between two arrays.
@@ -19,7 +20,11 @@ def minkowski_distance(a, b, p=2):
         float: Minkowski distance between arrays a and b.
     """
 
-    # TODO
+    if len(a) != len(b):
+        raise ValueError("a y b deben tener el mismo tamaño")
+
+    return np.sum(np.abs(a - b) ** p) ** (1 / p)
+
 
 
 # k-Nearest Neighbors Model
@@ -50,7 +55,18 @@ class knn:
             k (int, optional): Number of neighbors to use. Defaults to 5.
             p (int, optional): The degree of the Minkowski distance. Defaults to 2.
         """
-        # TODO
+
+        if k > 0 and p > 0:
+            self.k = k
+            self.p = p
+        else:
+            raise ValueError("k and p must be positive integers.")
+        
+        if X_train.shape[0] == y_train.shape[0]:
+            self.x_train = X_train
+            self.y_train = y_train
+        else:
+            raise ValueError("Length of X_train and y_train must be equal.")
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -62,7 +78,15 @@ class knn:
         Returns:
             np.ndarray: Predicted class labels.
         """
-        # TODO
+
+        predictions = []
+        for x in X:
+            dist = self.compute_distances(x)
+            k_nearest = self.get_k_nearest_neighbors(dist)
+            knn_labels = [self.y_train[indx] for indx in k_nearest]
+            predictions.append(self.most_common_label(knn_labels))
+        
+        return np.array(predictions)
 
     def predict_proba(self, X):
         """
@@ -77,7 +101,28 @@ class knn:
         Returns:
             np.ndarray: Predicted class probabilities.
         """
-        # TODO
+
+        probs = []
+        for x in X:
+            dist = self.compute_distances(x)
+            k_nearest = self.get_k_nearest_neighbors(dist)
+            knn_labels = [self.y_train[indx] for indx in k_nearest]
+            label_dict = self.get_label_counts(knn_labels)
+            prob_array = (label_dict[0]/self.k, label_dict[1]/self.k)
+            probs.append(prob_array)
+        
+        return np.array(probs)
+
+    
+    def get_label_counts(self, knn_labels: np.ndarray) -> dict: # Función creada por mí
+        label_dict = {}
+        for lbl in knn_labels:
+            if lbl in label_dict:
+                label_dict[lbl] += 1
+            else:
+                label_dict[lbl] = 1
+
+        return label_dict
 
     def compute_distances(self, point: np.ndarray) -> np.ndarray:
         """Compute distance from a point to every point in the training dataset
@@ -88,7 +133,10 @@ class knn:
         Returns:
             np.ndarray: distance from point to each point in the training dataset.
         """
-        # TODO
+
+        distances = np.array([minkowski_distance(x, point) for x in self.x_train])
+
+        return distances
 
     def get_k_nearest_neighbors(self, distances: np.ndarray) -> np.ndarray:
         """Get the k nearest neighbors indices given the distances matrix from a point.
@@ -102,7 +150,11 @@ class knn:
         Hint:
             You might want to check the np.argsort function.
         """
-        # TODO
+
+        sorted_indices = np.argsort(distances)
+        k_nearest = sorted_indices[:self.k]
+
+        return k_nearest
 
     def most_common_label(self, knn_labels: np.ndarray) -> int:
         """Obtain the most common label from the labels of the k nearest neighbors
@@ -113,15 +165,18 @@ class knn:
         Returns:
             int: most common label
         """
-        # TODO
+
+        label_dict = self.get_label_counts(knn_labels)
+
+        max_label = max(label_dict, key=label_dict.get)
+
+        return max_label
 
     def __str__(self):
         """
         String representation of the kNN model.
         """
         return f"kNN model (k={self.k}, p={self.p})"
-
-
 
 def plot_2Dmodel_predictions(X, y, model, grid_points_n):
     """
@@ -218,22 +273,25 @@ def evaluate_classification_metrics(y_true, y_pred, positive_label):
     y_pred_mapped = np.array([1 if label == positive_label else 0 for label in y_pred])
 
     # Confusion Matrix
-    # TODO
+    tp = np.sum((y_true_mapped == 1) & (y_pred_mapped == 1))
+    fp = np.sum((y_true_mapped == 0) & (y_pred_mapped == 1))
+    fn = np.sum((y_true_mapped == 1) & (y_pred_mapped == 0))
+    tn = np.sum((y_true_mapped == 0) & (y_pred_mapped == 0))
 
     # Accuracy
-    # TODO
+    accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
 
     # Precision
-    # TODO
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
 
     # Recall (Sensitivity)
-    # TODO
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
 
     # Specificity
-    # TODO
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
 
     # F1 Score
-    # TODO
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
 
     return {
         "Confusion Matrix": [tn, fp, fn, tp],
@@ -243,7 +301,6 @@ def evaluate_classification_metrics(y_true, y_pred, positive_label):
         "Specificity": specificity,
         "F1 Score": f1,
     }
-
 
 
 def plot_calibration_curve(y_true, y_probs, positive_label, n_bins=10):
@@ -269,7 +326,25 @@ def plot_calibration_curve(y_true, y_probs, positive_label, n_bins=10):
             - "true_proportions": Array of the fraction of positives in each bin
 
     """
-    # TODO
+    binary = (y_true == positive_label).astype(int)
+
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    true_proportions = np.zeros(n_bins)
+
+    for i in range(n_bins):
+        mask = (y_probs >= bin_edges[i]) & (y_probs < bin_edges[i + 1])
+        if np.sum(mask) > 0:
+            true_proportions[i] = np.mean(binary[mask])
+        else:
+            true_proportions[i] = np.nan  
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(bin_centers, true_proportions, marker="o", linestyle="-", label="Model Calibration")
+    plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Perfect Calibration")
+    plt.legend()
+    plt.grid()
+    plt.show()
     return {"bin_centers": bin_centers, "true_proportions": true_proportions}
 
 
@@ -299,8 +374,15 @@ def plot_probability_histograms(y_true, y_probs, positive_label, n_bins=10):
                 Array of predicted probabilities for the negative class.
 
     """
-    # TODO
 
+    y_true_mapped = (y_true == positive_label).astype(int)
+
+    plt.figure(figsize=(8, 5))
+    plt.hist(y_probs[y_true_mapped == 1], bins=n_bins, alpha=0.6, color="blue", label="Positive Class")
+    plt.hist(y_probs[y_true_mapped == 0], bins=n_bins, alpha=0.6, color="red", label="Negative Class")
+    plt.legend()
+    plt.grid()
+    plt.show()
     return {
         "array_passed_to_histogram_of_positive_class": y_probs[y_true_mapped == 1],
         "array_passed_to_histogram_of_negative_class": y_probs[y_true_mapped == 0],
@@ -329,5 +411,27 @@ def plot_roc_curve(y_true, y_probs, positive_label):
             - "tpr": Array of True Positive Rates for each threshold.
 
     """
-    # TODO
-    return {"fpr": np.array(fpr), "tpr": np.array(tpr)}
+    sort_prob = np.argsort(y_probs)
+    y_true = y_true[sort_prob]
+    y_probs = y_probs[sort_prob]
+
+    true_pos= sum(np.array(y_true) == positive_label)
+    true_neg = sum(np.array(y_true) != positive_label)
+
+    tp_list = []
+    fpr_list = []
+    lins = np.linspace(0, 1, 11)
+ 
+    for prob in lins:
+        tp = 0
+        fp = 0
+        for i in range(len(y_true)):
+            if y_probs[i] >= prob:
+                if y_true[i] == 1:
+                    tp += 1
+                else:
+                    fp += 1
+        tp_list.append(tp/true_pos)
+        fpr_list.append(fp/true_neg)
+  
+    return {"fpr": np.array(fpr_list), "tpr": np.array(tp_list)}
